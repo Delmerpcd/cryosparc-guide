@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CryoSPARC 单颗粒冷冻电镜工作流程 · 中文指南</title>
+<style>
+  :root {
+    --primary: #1a6b8a;
+    --primary-light: #e3f2f7;
+    --accent: #e8762e;
+    --accent-light: #fff3ea;
+    --success: #2d8c4a;
+    --success-light: #e9f5ed;
+    --warning: #b68a1e;
+    --warning-light: #fdf7e6;
+    --bg: #f8f9fb;
+    --card: #ffffff;
+    --text: #2c3e50;
+    --text-secondary: #5a6c7d;
+    --border: #e1e7ec;
+    --sidebar-width: 260px;
+    --radius: 10px;
+    --shadow: 0 2px 12px rgba(0,0,0,0.06);
+    --shadow-lg: 0 8px 30px rgba(0,0,0,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    display: flex;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    position: fixed; top: 0; left: 0;
+    width: var(--sidebar-width); height: 100vh;
+    background: linear-gradient(180deg, #0d3b4c 0%, #1a5d72 100%);
+    color: #c8dce4;
+    overflow-y: auto;
+    z-index: 100;
+    padding: 24px 0;
+    scrollbar-width: thin;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+
+  .sidebar-header {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,.1);
+    margin-bottom: 12px;
+  }
+  .sidebar-header .logo {
+    font-size: 18px; font-weight: 700;
+    color: #fff; line-height: 1.3;
+  }
+  .sidebar-header .sub {
+    font-size: 11px; color: #7fa8b8; margin-top: 2px;
+  }
+  .sidebar a {
+    display: block; padding: 8px 20px;
+    color: #b0c8d2; text-decoration: none;
+    font-size: 13.5px; transition: all 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .sidebar a:hover, .sidebar a.active {
+    color: #fff; background: rgba(255,255,255,0.06);
+    border-left-color: var(--accent);
+  }
+  .sidebar a.section-head {
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 1px; color: #5c8fa0;
+    margin-top: 16px; padding-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    pointer-events: none;
+  }
+
+  /* ── Main ── */
+  .main { margin-left: var(--sidebar-width); flex: 1; }
+
+  .hero {
+    background: linear-gradient(135deg, #0d3b4c 0%, #1a6b8a 50%, #1e8ab5 100%);
+    color: #fff; padding: 64px 48px 48px;
+  }
+  .hero h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.3px; }
+  .hero p { font-size: 16px; opacity: .85; margin-top: 8px; max-width: 700px; }
+
+  .container { max-width: 1100px; padding: 40px 48px; }
+
+  h2 {
+    font-size: 24px; color: var(--primary);
+    margin: 48px 0 16px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--primary-light);
+  }
+  h2:first-of-type { margin-top: 0; }
+  h3 {
+    font-size: 19px; color: #1a3b4c;
+    margin: 32px 0 12px;
+  }
+  h4 {
+    font-size: 16px; color: #2c3e50;
+    margin: 20px 0 8px;
+  }
+  p { margin: 8px 0; color: var(--text-secondary); }
+
+  /* ── Cards ── */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin: 20px 0; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.2s, transform 0.15s;
+  }
+  .card:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+  .card .tag {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    padding: 2px 10px; border-radius: 12px; margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .tag-preprocess { background: var(--primary-light); color: var(--primary); }
+  .tag-pick { background: var(--accent-light); color: var(--accent); }
+  .tag-classify { background: var(--success-light); color: var(--success); }
+  .tag-reconstruct { background: #ede4f5; color: #6b3fa0; }
+  .tag-refine { background: var(--warning-light); color: var(--warning); }
+  .tag-validate { background: #fce4e4; color: #c0392b; }
+  .card h4 { margin: 0 0 6px; font-size: 16px; }
+  .card p { font-size: 13.5px; margin: 4px 0; }
+  .card .job-name { font-family: "SF Mono", "Fira Code", "Consolas", monospace; font-size: 12px; color: #888; }
+
+  /* ── Flowchart ── */
+  .flowchart { margin: 24px 0; overflow-x: auto; }
+  .flow-row { display: flex; align-items: center; gap: 0; margin-bottom: 8px; flex-wrap: wrap; }
+  .flow-node {
+    background: var(--card); border: 1.5px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; font-size: 13px;
+    white-space: nowrap; text-align: center;
+    box-shadow: var(--shadow); font-weight: 500;
+  }
+  .flow-arrow {
+    font-size: 18px; color: #aaa; margin: 0 6px;
+    flex-shrink: 0;
+  }
+  .flow-node.start { border-color: var(--primary); background: var(--primary-light); color: var(--primary); font-weight: 700; }
+  .flow-node.end { border-color: #c0392b; background: #fce4e4; color: #c0392b; font-weight: 700; }
+  .flow-node.key { border-color: var(--accent); background: var(--accent-light); }
+
+  .pipeline-box {
+    background: var(--card); border: 2px solid var(--border);
+    border-radius: var(--radius); padding: 24px;
+    margin: 20px 0; box-shadow: var(--shadow);
+  }
+  .pipeline-tree {
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 13px; line-height: 2; color: #555;
+    padding: 16px; background: #fafbfc;
+    border-radius: 8px; border: 1px solid var(--border);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .pipeline-tree b { color: var(--primary); }
+  .pipeline-tree em { color: var(--accent); font-style: normal; }
+
+  /* ── Tables ── */
+  .param-table {
+    width: 100%; border-collapse: collapse;
+    margin: 16px 0; font-size: 14px;
+    box-shadow: var(--shadow); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .param-table th {
+    background: var(--primary);
+    color: #fff; padding: 10px 16px;
+    text-align: left; font-weight: 600;
+  }
+  .param-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .param-table tr:last-child td { border-bottom: none; }
+  .param-table .code { font-family: "SF Mono", "Fira Code", monospace; font-size: 13px; color: var(--accent); }
+
+  /* ── Tips ── */
+  .tip {
+    border-left: 4px solid var(--primary);
+    background: var(--primary-light);
+    padding: 12px 18px; border-radius: 0 8px 8px 0;
+    margin: 16px 0; font-size: 14px;
+  }
+  .tip strong { color: var(--primary); }
+  .warning-tip {
+    border-left-color: var(--accent);
+    background: var(--accent-light);
+  }
+  .warning-tip strong { color: var(--accent); }
+  .success-tip {
+    border-left-color: var(--success);
+    background: var(--success-light);
+  }
+  .success-tip strong { color: var(--success); }
+
+  /* ── Phase indicators ── */
+  .phase {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--primary); color: #fff;
+    padding: 4px 16px; border-radius: 20px;
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.5px; margin-bottom: 12px;
+  }
+
+  /* ── Back to top ── */
+  .back-top {
+    position: fixed; bottom: 24px; right: 24px;
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--primary); color: #fff;
+    border: none; cursor: pointer; font-size: 18px;
+    box-shadow: var(--shadow-lg); z-index: 50;
+    transition: transform 0.2s;
+  }
+  .back-top:hover { transform: scale(1.1); }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; }
+    .hero { padding: 36px 20px; }
+    .hero h1 { font-size: 24px; }
+    .container { padding: 20px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .flow-row { flex-direction: column; align-items: flex-start; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">CryoSPARC<br>中文工作指南</div>
+    <div class="sub">单颗粒冷冻电镜 · SPA</div>
+  </div>
+  <a href="#overview" class="active">总览</a>
+  <a href="#flowchart">完整工作流程图</a>
+  <a href="#phase1" class="section-head">第一阶段 · 预处理</a>
+  <a href="#import">数据导入</a>
+  <a href="#motion">漂移校正</a>
+  <a href="#ctf">CTF 估计</a>
+  <a href="#curate">照片筛选</a>
+  <a href="#phase2" class="section-head">第二阶段 · 颗粒挑选</a>
+  <a href="#blob">Blob 自动挑选</a>
+  <a href="#template">Template 模板挑选</a>
+  <a href="#topaz">Topaz 深度学习挑选</a>
+  <a href="#extract">颗粒提取</a>
+  <a href="#phase3" class="section-head">第三阶段 · 二维分类</a>
+  <a href="#2dclass">2D 分类</a>
+  <a href="#select2d">选取 2D 类别</a>
+  <a href="#phase4" class="section-head">第四阶段 · 三维重建</a>
+  <a href="#abinitio">Ab-Initio 初始模型</a>
+  <a href="#phase5" class="section-head">第五阶段 · 精修优化</a>
+  <a href="#homogeneous">均质精修</a>
+  <a href="#heterogeneous">非均质精修</a>
+  <a href="#nonuniform">非均匀精修</a>
+  <a href="#local">局部精修</a>
+  <a href="#ctfrefine">CTF 精修</a>
+  <a href="#phase6" class="section-head">第六阶段 · 后处理验证</a>
+  <a href="#sharpen">锐化与滤波</a>
+  <a href="#3dva">3D 变异性分析</a>
+  <a href="#validation">验证与评估</a>
+  <a href="#params" class="section-head">附录</a>
+  <a href="#params-table">参数速查表</a>
+  <a href="#tips">技巧与常见问题</a>
+  <a href="#casestudy">案例研究</a>
+</nav>
+
+<!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+<div class="main">
+
+<!-- HERO -->
+<section class="hero" id="overview">
+  <h1>CryoSPARC 单颗粒分析工作流程</h1>
+  <p>基于 CryoSPARC 官方指南整理的中文学习资料，涵盖从原始数据导入到最终三维结构验证的完整单颗粒冷冻电镜（Single Particle Cryo-EM）数据处理流程。</p>
+</section>
+
+<div class="container">
+
+<!-- ═══════════ OVERVIEW ═══════════ -->
+<h2>工作流程总览</h2>
+<p>CryoSPARC 单颗粒分析包含 <strong>6 个主要阶段、20+ 个作业类型</strong>。从原始电影文件（Movies）出发，经过漂移校正、CTF 估计、颗粒挑选、二维分类、三维初模重建、精修优化，最终获得高分辨率三维密度图。</p>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-preprocess">阶段 1</span>
+    <h4>预处理</h4>
+    <p>数据导入 → 漂移校正 → CTF 估计 → 照片筛选</p>
+    <p class="job-name">Import Movies · Patch Motion · Patch CTF · Curate Exposures</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-pick">阶段 2</span>
+    <h4>颗粒挑选</h4>
+    <p>Blob/Template/Topaz 挑选 → 检查 → 提取</p>
+    <p class="job-name">Blob Picker · Template Picker · Topaz · Extract</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-classify">阶段 3</span>
+    <h4>二维分类</h4>
+    <p>2D 分类 → 选取优质类别（通常 2-4 轮迭代清理）</p>
+    <p class="job-name">2D Classification · Select 2D Classes</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-reconstruct">阶段 4</span>
+    <h4>三维重建</h4>
+    <p>Ab-Initio 从头重建初始模型（无需参考结构）</p>
+    <p class="job-name">Ab-Initio Reconstruction</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-refine">阶段 5</span>
+    <h4>精修优化</h4>
+    <p>均质/非均质/非均匀精修 · CTF 精修 · 局部精修</p>
+    <p class="job-name">Homogeneous · Heterogeneous · Non-Uniform · CTF Refine</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-validate">阶段 6</span>
+    <h4>后处理验证</h4>
+    <p>锐化 · 局部分辨率 · 3DVA · FSC 验证</p>
+    <p class="job-name">Sharpening · Local Resolution · 3DVA · Validation</p>
+  </div>
+</div>
+
+<!-- ═══════════ FLOWCHART ═══════════ -->
+<h2 id="flowchart">完整工作流程示意图</h2>
+
+<div class="pipeline-box">
+<div class="pipeline-tree">
+<b>Import Movies</b> (导入原始电影)
+  └─► <b>Patch Motion Correction</b> (漂移校正)
+        └─► <b>Patch CTF Estimation</b> (CTF 估计)
+              └─► <b>Manually Curate Exposures</b> (照片筛选)
+                    │
+                    ├─► <em>Blob Picker</em> (自动挑选)
+                    │     └─► Inspect Picks (检查挑选)
+                    │           └─► Extract (提取，Fourier裁剪 4-6x)
+                    │                 └─► 2D Classification (二维分类)
+                    │                       └─► Select 2D (选取)
+                    │                             │
+                    ├─► <em>Template Picker</em> (模板挑选) ◄── 用优质 2D 类别作模板
+                    │     └─► Inspect Picks → Extract → 2D Classification (×2-4 轮)
+                    │           └─► Select 2D Classes (最终干净颗粒集)
+                    │                 └─► <b>Ab-Initio Reconstruction</b> (初始模型，1-4类)
+                    │                       ├─► Heterogeneous Refinement (非均质精修分离状态)
+                    │                       └─► <b>Homogeneous / Non-Uniform Refinement</b>
+                    │                             └─► Re-extract (取消 Fourier 裁剪)
+                    │                                   └─► <b>Non-Uniform Refinement</b>
+                    │                                         ├─► Global CTF Refinement
+                    │                                         ├─► Local CTF Refinement
+                    │                                         ├─► Local Refinement (局部精修)
+                    │                                         └─► <b>Sharpening → Local Resolution → Validation</b>
+                    │
+                    └─► <em>Topaz</em> (深度学习挑选，可替代 Blob+Template)
+</div>
+</div>
+
+<!-- ═══════════ PHASE 1: PREPROCESSING ═══════════ -->
+<h2 id="phase1">第一阶段：预处理</h2>
+<p>预处理是数据质量的基石——在此阶段剔除不良照片，可避免下游分析中 "垃圾进、垃圾出" 的问题。</p>
+
+<!-- Import Movies -->
+<h3 id="import">1.1 导入原始数据 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Import Movies</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-preprocess">作业类型</span>
+    <h4>Import Movies</h4>
+    <p>将原始电影文件（TIFF、MRC、EER 等格式）导入 CryoSPARC 项目。需提供增益参考文件（Gain Reference）和坏点文件（Defect File）。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>说明</th><th>典型值</th></tr>
+  <tr><td>Pixel Size (Å)</td><td>像素尺寸</td><td class="code">1.0–1.5</td></tr>
+  <tr><td>Accelerating Voltage (kV)</td><td>加速电压</td><td class="code">200 / 300</td></tr>
+  <tr><td>Spherical Aberration (mm)</td><td>球差系数</td><td class="code">2.0 / 2.7</td></tr>
+  <tr><td>Total Exposure Dose (e⁻/Å²)</td><td>总电子剂量</td><td class="code">40–60</td></tr>
+</table>
+
+<div class="tip"><strong>提示：</strong>EER 格式数据需额外设置分帧数（Number of Fractions）和上采样因子（Upsampling Factor）。导入 EPU XML 元数据可自动解析束位移值。</div>
+
+<!-- Patch Motion Correction -->
+<h3 id="motion">1.2 漂移校正 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Patch Motion Correction</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-preprocess">作业类型</span>
+    <h4>Patch Motion Correction (Multi)</h4>
+    <p>对每张电影进行全帧、分块（Patch-based）局部运动校正。相比传统的整帧刚性校正，分块校正能更好地建模局部的各向异性束诱导运动。输出剂量加权的对齐显微照片。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>说明</th><th>建议值</th></tr>
+  <tr><td>Maximum alignment resolution (Å)</td><td>对齐分辨率上限</td><td class="code">3–5</td></tr>
+  <tr><td>Number of GPUs</td><td>GPU 数量（Multi 版本）</td><td class="code">2–4</td></tr>
+</table>
+
+<!-- Patch CTF -->
+<h3 id="ctf">1.3 CTF 估计 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Patch CTF Estimation</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-preprocess">作业类型</span>
+    <h4>Patch CTF Estimation (Multi)</h4>
+    <p>使用分块方法估计每张显微照片的衬度传递函数（CTF）参数。对于倾斜或非均匀样品，分块方法比整张照片的 CTFFIND4 更准确。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>说明</th><th>建议值</th></tr>
+  <tr><td>Min / Max defocus (Å)</td><td>离焦搜索范围</td><td class="code">5000–50000</td></tr>
+  <tr><td>Minimum CTF fit resolution (Å)</td><td>CTF 拟合最低分辨率</td><td class="code">5–6</td></tr>
+</table>
+
+<div class="tip"><strong>提示：</strong>CTF 拟合分辨率差于 5–6 Å 的显微照片通常需要在下一步筛选中剔除。</div>
+
+<!-- Curate Exposures -->
+<h3 id="curate">1.4 照片筛选 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Manually Curate Exposures</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-preprocess">交互式</span>
+    <h4>Manually Curate Exposures</h4>
+    <p>打开交互界面，检查每张显微照片的 CTF 拟合质量、像散（Astigmatism）、估计冰层厚度、运动路径和功率谱。通过滑块设定阈值剔除不良照片。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>筛选指标</th><th>建议阈值</th><th>说明</th></tr>
+  <tr><td>CTF Fit Resolution</td><td class="code">&lt; 5–6 Å</td><td>剔除 CTF 拟合差的数据</td></tr>
+  <tr><td>Astigmatism</td><td class="code">&lt; 400 Å</td><td>剔除像散过大的照片</td></tr>
+  <tr><td>Ice Thickness</td><td>视情况</td><td>剔除冰层过厚或过薄的区域</td></tr>
+</table>
+
+<!-- ═══════════ PHASE 2: PARTICLE PICKING ═══════════ -->
+<h2 id="phase2">第二阶段：颗粒挑选与提取</h2>
+<p>颗粒挑选是决定最终分辨率的关键环节。推荐采用<strong>两阶段策略</strong>：先用快速方法粗选，生成模板后再用模板挑选获取高质量颗粒。</p>
+
+<h3 id="blob">2.1 Blob 自动挑选 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Blob Picker</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-pick">GPU 作业</span>
+    <h4>Blob Picker</h4>
+    <p>基于高斯拉普拉斯算子（Laplacian-of-Gaussian）的快速无模板颗粒检测器。适合初步粗选，产生初始颗粒集用于后续模板生成。</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-pick">交互式</span>
+    <h4>Inspect Particle Picks</h4>
+    <p>通过 NCC（归一化互相关）分数和局部功率（Local Power）两个滑块交互式筛选颗粒，剔除碳膜边缘、晶冰等污染物。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>说明</th><th>建议值</th></tr>
+  <tr><td>Min / Max particle diameter (Å)</td><td>颗粒直径范围</td><td class="code">100–300</td></tr>
+  <tr><td>Min separation distance</td><td>颗粒间最小间距</td><td class="code">0.5–1× 直径</td></tr>
+</table>
+
+<h3 id="template">2.2 Template 模板挑选 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Template Picker</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-pick">GPU 作业</span>
+    <h4>Template Picker</h4>
+    <p>使用优质 2D 类别图像作为模板，通过互相关搜索进行颗粒挑选。相比 Blob Picker，假阳性率大幅降低，颗粒定位更准确。</p>
+  </div>
+</div>
+
+<div class="tip success-tip"><strong>最佳实践：</strong>先手动挑选 ~200–1000 个颗粒 → 2D 分类得到模板 → 再用 Template Picker 在全数据集上挑选。这是目前最常用的高精度挑选策略。</div>
+
+<h3 id="topaz">2.3 Topaz 深度学习挑选</h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-pick">深度学习</span>
+    <h4>Topaz Train / Extract</h4>
+    <p>基于深度学习的颗粒挑选方法。需要约 1,000 个手动挑选的颗粒用于训练模型。训练完成后可对整个数据集进行高质量自动挑选，效果常优于 Template Picker。</p>
+  </div>
+</div>
+
+<div class="tip"><strong>提示：</strong>Topaz 需要手动挑选的颗粒覆盖不同离焦范围，确保模型泛化能力。</div>
+
+<h3 id="extract">2.4 颗粒提取 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Extract From Micrographs</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-pick">作业类型</span>
+    <h4>Extract From Micrographs</h4>
+    <p>从显微照片中提取颗粒图像。初期使用 Fourier 裁剪（Binning 4–6×）大幅降低计算量；最终精修阶段再以全分辨率重新提取。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>阶段</th><th>Box Size</th><th>Fourier Crop</th><th>像素尺寸</th></tr>
+  <tr><td>初期分类</td><td class="code">256 px</td><td class="code">128 px (2× bin)</td><td class="code">~2.5 Å/px</td></tr>
+  <tr><td>最终精修</td><td class="code">256–320 px</td><td class="code">256 px (无裁剪)</td><td class="code">原始 ~1.2 Å/px</td></tr>
+</table>
+
+<div class="tip success-tip"><strong>关键原则：</strong>早期阶段始终使用 Fourier 裁剪（4–6× binning）加速二维分类和初始模型重建；仅在最终精修时使用全分辨率。这可以节省大量计算时间。</div>
+
+<!-- ═══════════ PHASE 3: 2D CLASSIFICATION ═══════════ -->
+<h2 id="phase3">第三阶段：二维分类</h2>
+
+<h3 id="2dclass">3.1 2D 分类 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">2D Classification (NEW)</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-classify">GPU 作业</span>
+    <h4>2D Classification</h4>
+    <p>将提取的颗粒进行二维对齐和聚类，生成多个类别平均图。这是数据清理的核心步骤——通过视觉检查类别平均图来区分好颗粒与污染物/聚集物。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>说明</th><th>建议值</th></tr>
+  <tr><td>Number of 2D classes</td><td>类别数量</td><td class="code">50–100（大数据集）<br>10–20（模板生成）</td></tr>
+  <tr><td>Batchsize per class</td><td>每类批次大小</td><td class="code">200–400</td></tr>
+  <tr><td>Number of iterations</td><td>迭代次数</td><td class="code">20–40（默认即可）</td></tr>
+  <tr><td>Remove duplicate particles</td><td>去除重复颗粒</td><td class="code">true（球状蛋白）<br>false（螺旋/纤维状）</td></tr>
+</table>
+
+<h3 id="select2d">3.2 选取 2D 类别 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Select 2D Classes</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-classify">交互式</span>
+    <h4>Select 2D Classes</h4>
+    <p>交互式查看所有 2D 类别平均图，选取显示清晰二级结构特征的类别，剔除噪声、模糊、部分颗粒和冰污染类别。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>选取标准</th><th>剔除标准</th></tr>
+  <tr><td>清晰的二级结构细节</td><td>噪声、模糊、低分辨率</td></tr>
+  <tr><td>锐利的边缘特征</td><td>残缺/聚集颗粒</td></tr>
+  <tr><td>高颗粒数量</td><td>冰污染、边缘伪影</td></tr>
+  <tr><td>多样的取向分布</td><td>单一取向过度富集</td></tr>
+</table>
+
+<div class="tip warning-tip"><strong>重要：</strong>通常需要进行 <strong>2–4 轮</strong> 二维分类 + 选取，逐步清理颗粒堆栈。预期会丢弃初始挑选颗粒的 50–80%。不要期望一次性获得完美结果。</div>
+
+<!-- ═══════════ PHASE 4: AB-INITIO ═══════════ -->
+<h2 id="phase4">第四阶段：三维初始模型重建</h2>
+
+<h3 id="abinitio">4.1 Ab-Initio 重建 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Ab-Initio Reconstruction</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-reconstruct">GPU 作业</span>
+    <h4>Ab-Initio Reconstruction</h4>
+    <p>使用随机梯度下降（SGD）算法从二维颗粒图像<strong>从头重建</strong>三维密度图，无需任何初始参考结构。运行 1–4 个类别可以在初始阶段就区分不同的构象/组成状态。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>说明</th><th>建议值</th></tr>
+  <tr><td>Number of classes</td><td>初始模型类别数</td><td class="code">1–4</td></tr>
+  <tr><td>Symmetry</td><td>对称性</td><td class="code">C1（不确定时）</td></tr>
+  <tr><td>Initial low-pass filter (Å)</td><td>初始低通滤波</td><td class="code">30</td></tr>
+  <tr><td>Class similarity</td><td>类别相似度</td><td class="code">默认</td></tr>
+</table>
+
+<div class="tip"><strong>提示：</strong>建议运行多次 Ab-Initio，每次使用不同的类别数（如 2、3、4 类），在 ChimeraX 中检查哪个结果显示出可解释的结构特征。不确定对称性时使用 C1。</div>
+
+<!-- ═══════════ PHASE 5: REFINEMENT ═══════════ -->
+<h2 id="phase5">第五阶段：精修与优化</h2>
+
+<h3 id="homogeneous">5.1 均质精修 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Homogeneous Refinement (NEW)</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-refine">GPU 作业</span>
+    <h4>Homogeneous Refinement</h4>
+    <p>将所有颗粒归入单一三维类别的迭代最大似然精修。适用于颗粒构象均一的样品。输出精修后的三维密度图、两个半图（用于 FSC）、Mask 和每颗粒对齐参数。</p>
+  </div>
+</div>
+
+<h3 id="heterogeneous">5.2 非均质精修 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Heterogeneous Refinement</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-refine">GPU 作业</span>
+    <h4>Heterogeneous Refinement</h4>
+    <p>使用多个初始三维模型（来自 Ab-Initio 的不同类别），让颗粒"竞争"分配到最匹配的体积。用于分离不同的构象状态或组成成分。选取最佳类别后，输入均质或非均匀精修。</p>
+  </div>
+</div>
+
+<h3 id="nonuniform">5.3 非均匀精修 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Non-Uniform Refinement</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-refine">强力推荐 ⭐</span>
+    <h4>Non-Uniform Refinement</h4>
+    <p>均质精修的升级版，在空间频率上施加<strong>自适应正则化</strong>。几乎所有情况下都是最终高分辨率精修的首选，能显著改善高分辨率区域密度图质量。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>建议值</th></tr>
+  <tr><td>Symmetry</td><td class="code">C1 / C2 / D2 / C4 等（按样品对称性）</td></tr>
+  <tr><td>Initial lowpass resolution</td><td class="code">12–15 Å</td></tr>
+  <tr><td>Dynamic masking</td><td class="code">On</td></tr>
+  <tr><td>Optimize per-particle defocus</td><td class="code">On</td></tr>
+  <tr><td>Optimize per-group CTF params</td><td class="code">On</td></tr>
+</table>
+
+<h3 id="local">5.4 局部精修 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Local Refinement</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-refine">高级</span>
+    <h4>Local Refinement</h4>
+    <p>当复合体存在柔性结构域时，创建软 Mask 覆盖该区域进行局部精修。允许柔性结构域相对于复合体其余部分作刚体运动，显著改善柔性区域密度图质量。</p>
+  </div>
+</div>
+
+<table class="param-table">
+  <tr><th>参数</th><th>建议值</th></tr>
+  <tr><td>Fulcrum coordinates</td><td>Mask 中心或铰链点坐标</td></tr>
+  <tr><td>Rotation search extent</td><td class="code">10–15°（取决于柔性程度）</td></tr>
+  <tr><td>Shift search extent</td><td class="code">3–5 Å</td></tr>
+  <tr><td>Use pose/shift Gaussian prior</td><td class="code">True</td></tr>
+</table>
+
+<h3 id="ctfrefine">5.5 CTF 精修 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">Global / Local CTF Refinement</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-refine">精修优化</span>
+    <h4>Global CTF Refinement</h4>
+    <p>按颗粒组精修高阶 CTF 参数（束倾斜、三叶像差等）。</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-refine">精修优化</span>
+    <h4>Local CTF Refinement</h4>
+    <p>对每个颗粒单独精修 CTF 参数，进一步提高分辨率。</p>
+  </div>
+</div>
+
+<div class="tip success-tip"><strong>分辨率提升：</strong>全局和局部 CTF 精修通常可带来 <strong>0.1–0.3 Å</strong> 的分辨率提升。推荐的精修循环：Non-Uniform Refinement → Global CTF Refine → Non-Uniform → Local CTF Refine → Non-Uniform。</div>
+
+<!-- ═══════════ PHASE 6: POST-PROCESSING ═══════════ -->
+<h2 id="phase6">第六阶段：后处理与验证</h2>
+
+<h3 id="sharpen">6.1 锐化与局部分辨率</h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-validate">作业类型</span>
+    <h4>Local Resolution Estimation</h4>
+    <p>计算密度图每个体素的局部分辨率，用颜色编码显示在密度图表面。帮助识别柔性/无序区域。</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-validate">作业类型</span>
+    <h4>Sharpen 3D Map</h4>
+    <p>应用 B 因子锐化密度图，补偿重建过程中的振幅衰减。可选择全局 B 因子或基于局部分辨率的锐化。</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-validate">作业类型</span>
+    <h4>Local Filtering</h4>
+    <p>根据局部分辨率对锐化图进行局部滤波，优化不同区域的显示效果。</p>
+  </div>
+</div>
+
+<h3 id="3dva">6.2 3D 变异性分析 <span style="font-family:monospace;font-size:13px;color:#888;font-weight:400;">3D Variability Analysis (3DVA)</span></h3>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-validate">高级分析</span>
+    <h4>3D Variability Analysis</h4>
+    <p>分析颗粒的连续构象异质性。通过主成分分析（PCA）识别主要的运动/构象变化模式，生成沿每个成分的密度图动画。适用于研究分子机器的动态过程。</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-validate">高级分析</span>
+    <h4>3D Flex</h4>
+    <p>对连续柔性运动进行建模，在重建过程中补偿颗粒间的柔性差异，进一步提升重建质量。</p>
+  </div>
+</div>
+
+<h3 id="validation">6.3 验证与评估</h3>
+
+<table class="param-table">
+  <tr><th>验证指标</th><th>标准</th><th>说明</th></tr>
+  <tr><td>Gold-Standard FSC</td><td class="code">FSC = 0.143</td><td>金标准傅里叶壳相关系数，报告分辨率的标准方法</td></tr>
+  <tr><td>Local Resolution</td><td>各地区不同</td><td>密度图不同区域可能达到不同分辨率</td></tr>
+  <tr><td>角度分布</td><td>覆盖均匀</td><td>检查颗粒取向是否覆盖所有 Euler 角方向</td></tr>
+  <tr><td>与已发表结构比较</td><td>—</td><td>如有 PDB 参考结构，进行密度图-模型 FSC 比较</td></tr>
+</table>
+
+<!-- ═══════════ APPENDIX ═══════════ -->
+<h2 id="params-table">附录 A：关键参数速查表</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h4>一般准则</h4>
+    <table style="width:100%;font-size:13px;">
+      <tr><td style="padding:4px 0;">颗粒挑选质量</td><td style="color:var(--accent);font-weight:600;">最关键因素</td></tr>
+      <tr><td style="padding:4px 0;">Fourier 裁剪</td><td>早期 4–6×，终期无裁剪</td></tr>
+      <tr><td style="padding:4px 0;">迭代清理</td><td>2–4 轮 2D 分类，预期丢 50–80%</td></tr>
+      <tr><td style="padding:4px 0;">CTF 精修</td><td>通常提 0.1–0.3 Å</td></tr>
+      <tr><td style="padding:4px 0;">对称性使用</td><td>仅在精修阶段使用已知对称性</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h4>常用数据集 (EMPIAR)</h4>
+    <table style="width:100%;font-size:13px;">
+      <tr><td style="padding:4px 0;">EMPIAR-10059</td><td>TRPV1 (膜蛋白)</td></tr>
+      <tr><td style="padding:4px 0;">EMPIAR-10256</td><td>核糖体</td></tr>
+      <tr><td style="padding:4px 0;">EMPIAR-10031</td><td>MAVS (螺旋纤维)</td></tr>
+      <tr><td style="padding:4px 0;">EMPIAR-10668</td><td>蛋白酶体</td></tr>
+      <tr><td style="padding:4px 0;">EMPIAR-10716</td><td>剪接体</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════ TIPS ═══════════ -->
+<h2 id="tips">附录 B：技巧与常见问题</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h4>为什么我的 2D 分类结果不好？</h4>
+    <p style="font-size:13px;">可能原因：颗粒挑选不准确（假阳性太多）、颗粒未居中、数据集异质性过高、Fourier 裁剪太激进。解决：优化挑选参数，尝试 Template Picker 或 Topaz。</p>
+  </div>
+  <div class="card">
+    <h4>Ab-Initio 重建看起来很怪？</h4>
+    <p style="font-size:13px;">尝试运行多个类别数（2/3/4类），其中"垃圾"类别会吸收不良颗粒。在 ChimeraX 中检查所有输出体积，再决定使用哪个。</p>
+  </div>
+  <div class="card">
+    <h4>分辨率到瓶颈了怎么办？</h4>
+    <p style="font-size:13px;">依次尝试：重新提取无裁剪颗粒 → Non-Uniform Refinement → Global CTF Refine → Non-Uniform → Local CTF Refine → Non-Uniform。每步检查 FSC 曲线变化。</p>
+  </div>
+  <div class="card">
+    <h4>对称性应该什么时候设置？</h4>
+    <p style="font-size:13px;">Ab-Initio 阶段如果不确定就用 C1。精修阶段再应用已知对称性。<strong>使用错误对称性会破坏重建</strong>，务必确认。</p>
+  </div>
+  <div class="card">
+    <h4>我应该用 Blob Picker 还是 Template Picker？</h4>
+    <p style="font-size:13px;">推荐流程：Blob/手动挑选（粗选）→ 2D 分类（生成模板）→ Template Picker（精细挑选）。有 GPU 资源可尝试 Topaz 深度学习挑选。</p>
+  </div>
+  <div class="card">
+    <h4>如何判断某个 2D 类别是否"好"？</h4>
+    <p style="font-size:13px;">好类别：清晰的二级结构细节、锐利边缘、高信噪比、颗粒数多。坏类别：模糊不清、冰/碳膜伪影、边缘效应、仅含 1–2 个颗粒。</p>
+  </div>
+</div>
+
+<!-- ═══════════ CASE STUDY ═══════════ -->
+<h2 id="casestudy">附录 C：案例研究 — TRPV1 (EMPIAR-10059)</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="tag tag-reconstruct">案例</span>
+    <h4>DkTx-bound TRPV1</h4>
+    <p><strong>数据集：</strong>1,200 张已进行漂移校正的显微照片。</p>
+    <p><strong>样品：</strong>大鼠 TRPV1 同源四聚体（~309 kDa），嵌入纳米盘。</p>
+    <p><strong>对称性：</strong>C4（同源四聚体），但 DkTx 毒素以二聚体形式结合。</p>
+  </div>
+  <div class="card">
+    <span class="tag tag-reconstruct">参数</span>
+    <h4>采集参数</h4>
+    <p>像素尺寸：1.2156 Å | 电压：300 kV</p>
+    <p>球差：2.0 mm | 总剂量：41 e⁻/Å²</p>
+    <p>Blob 挑选：100–130 Å 直径 → ~110 万初始颗粒</p>
+  </div>
+</div>
+
+<div class="pipeline-box">
+<h4 style="margin-top:0">TRPV1 处理流程</h4>
+<div class="pipeline-tree">
+Import Micrographs (跳过 Patch Motion，数据已校正)
+  └─► Patch CTF Estimation
+        └─► Manually Curate Exposures (CTF fit ≤ 6 Å，剔除 4 张 → 1,196 张)
+              └─► Blob Picker (100–130 Å) → Inspect Picks → Extract (256→128)
+                    └─► 2D Classification → Ab-Initio → Heterogeneous Refinement
+                          └─► Template Picker → Extract → 2D Classification
+                                └─► Ab-Initio → Heterogeneous Refinement
+                                      └─► Re-extract (256 px, 无裁剪)
+                                            └─► <b>Non-Uniform Refinement</b> (C4 对称)
+                                                  ├─► Local Resolution → Sharpening
+                                                  └─► Mask (CTD) → Local Refinement → Sharpening
+</div>
+</div>
+
+<div class="tip"><strong>学习要点：</strong>此案例展示了如何处理对称性冲突（C4 全复合体 vs C2 毒素结合）、局部精修改善柔性结构域（CTD），以及 Particle Subtraction 隔离目标区域信号。</div>
+
+<p style="text-align:center;margin:48px 0 24px;color:#aaa;font-size:12px;">
+  内容整理自 CryoSPARC Guide 及社区资源 — 仅用于学习参考
+</p>
+
+</div><!-- .container -->
+</div><!-- .main -->
+
+<button class="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="返回顶部">↑</button>
+
+<script>
+  // Highlight active nav link on scroll
+  const sections = document.querySelectorAll('h2[id], h3[id]');
+  const navLinks = document.querySelectorAll('.sidebar a:not(.section-head)');
+
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => {
+      if (window.scrollY >= s.offsetTop - 100) current = s.id;
+    });
+    navLinks.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  });
+
+  // Show/hide back-to-top button
+  window.addEventListener('scroll', () => {
+    document.querySelector('.back-top').style.display = window.scrollY > 600 ? 'block' : 'none';
+  });
+  document.querySelector('.back-top').style.display = 'none';
+</script>
+
+</body>
+</html>
